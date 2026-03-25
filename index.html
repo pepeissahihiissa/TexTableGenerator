@@ -6,7 +6,7 @@
 <style>
 body { font-family: sans-serif; padding: 20px; }
 textarea { width: 100%; height: 180px; font-family: monospace; font-size: 14px; }
-#output { width: 100%; height: 180px; font-family: monospace; font-size: 14px; }
+pre { width: 100%; padding: 10px; background: #f7f7f7; border: 1px solid #ccc; white-space: pre; font-family: monospace; font-size: 14px; }
 button { padding: 8px 16px; margin-top: 10px; }
 </style>
 </head>
@@ -17,7 +17,8 @@ button { padding: 8px 16px; margin-top: 10px; }
 <button id="convertBtn">変換</button>
 <button id="copyBtn">コピー</button>
 <br /><br />
-<textarea id="output" readonly placeholder="変換結果がここに表示されます"></textarea>
+<pre id="output">変換結果がここに表示されます</pre>
+<textarea id="copyBuffer" style="display:none"></textarea>
 
 <script>
 function parseMarkdownTable(md) {
@@ -35,25 +36,25 @@ function parseMarkdownTable(md) {
 
 function convertToKatex(rows) {
     if (rows.length === 0) return "";
-
     const colCount = rows[0].length;
     const colSpec = Array(colCount).fill("c").join("|");
-
     let body = rows.map(r => r.join(" & ")).join(" \\\n\\hline\n");
-
     return `$$\n\\begin{array}{|${colSpec}|}\\hline\n${body} \\\n\\hline\n\\end{array}\n$$`;
 }
 
 document.getElementById("convertBtn").onclick = () => {
     const md = document.getElementById("input").value;
     const rows = parseMarkdownTable(md);
-    const tex = convertToKatex(rows);
-    document.getElementById("output").value = tex;
+    let tex = convertToKatex(rows);
+    document.getElementById("output").textContent = tex;
 };
 
 document.getElementById("copyBtn").onclick = () => {
-    const out = document.getElementById("output");
-    out.select();
+    let raw = document.getElementById("output").textContent;
+    let escaped = raw.replace(/\\/g, "\\\\");
+    const buf = document.getElementById("copyBuffer");
+    buf.value = escaped;
+    buf.select();
     document.execCommand("copy");
 };
 </script>
