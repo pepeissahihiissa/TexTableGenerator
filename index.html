@@ -12,55 +12,132 @@ button { padding: 8px 16px; margin-top: 10px; }
 </head>
 <body>
 <h2>Markdown 表 → KaTeX array 変換</h2>
+
 <textarea id="input" placeholder="ここにMarkdown表を貼り付けてください"></textarea>
 <br />
 <button id="convertBtn">変換</button>
 <button id="copyBtn">コピー</button>
 <br /><br />
+
+<div id="errorMsg" style="color: #d9534f; font-size: 14px; margin-top: 10px; min-height: 1.5em;"></div>
+
+<h3>プレビュー・編集</h3>
+<div id="tablePreview" style="margin-bottom: 20px; overflow-x: auto;">
+    </div>
+
 <pre id="output">変換結果がここに表示されます</pre>
 <textarea id="copyBuffer" style="display:none"></textarea>
 
+※noteへのコピーのために￥￥（改行）は￥￥￥￥に変換しています。
+noteに貼る場合は、テキスト選択してコピーではなく、コピーボタンをご利用ください。
+
 <script>
+// 変換処理
 function convertTable() {
-    const md = document.getElementById("mdInput").value;
-    const lines = md.trim().split("\n");
+    const input = document.getElementById("input").value.trim();
+    const errorElem = document.getElementById("errorMsg");
+    errorElem.textContent = ""; // エラー出力をリセット
 
-    // 列 spec（|c|c|c|... を作る）
-    const colCount = lines[0].split("|").length - 2;
-    const colSpec = "c|".repeat(colCount);
-
-    let body = "";
-    for (let i = 0; i < lines.length; i++) {
-        if (i === 1) continue; // --- 区切り行はスキップ
-
-        const cols = lines[i]
-          .split("|")
-          .slice(1, -1)
-          .map(c => c.trim());
-
-        body += cols.join(" & ") + " \\\\\\\\ \\hline\n";  
-        // ^ JS で \\ を出すには \\\\ が必要
+    // --- エラーチェック1: 空入力 ---
+    if (!input) {
+        errorElem.textContent = "⚠️ 入力が空です。Markdown、Excel、またはCSVを貼り付けてください。";
+        return;
     }
 
-    const katex = 
-      "$$\\n" +
-      "\\\\begin{array}{|" + colSpec + "}\\\\hline\\n" +
-      body +
-      "\\\\end{array}\\n" +
-      "$$";
+    let tableData = [];
+    const lines = input.split('\n');
+    
+    // 形式判定
+    if (input.includes('|')) {
+        tableData = lines
+            .filter((line, i) => !(i === 1 && line.includes('---')))
+            .map(line => line.split('|').filter((cell, i, arr) => i > 0 && i < arr.length - 1).map(c => c.trim()));
+    } else {
+        const delimiter = input.includes('\t') ? '\t' : ',';
+        tableData = lines.map(line => line.split(delimiter).map(c => c.trim()));
+    }
 
-    // 表示
-    document.getElementById("katexOutput").textContent = katex;
+    // --- エラーチェック2: 列数の不一致 ---
+    const colCounts = tableData.map(row => row.length);
+    const maxCols = Math.max(...colCounts);
+    const isInconsistent = colCounts.some(count => count !== maxCols);
 
-    // コピー用
-    document.getElementById("copyTarget").value = katex;
-}
+    if (isInconsistent) {
+        errorElem.textContent = `⚠️ 行によって列数が異なります（最大 ${maxCols} 列）。正しく変換できない可能性があります。`;
+        // 処理は続行させますが、不足分を補完する処理を入れるとより親切です
+        tableData = tableData.map(row => {
+            while(row.length < maxCols) row.push(""); // 足りないセルを空文字で埋める
+            return row;
+        });
+		
+		// --- プレビューテーブルの生成 ---
+    renderPreviewTable(tableData);
+    
+    // --- TeX出力の更新 ---
+    updateOutputFromData(tableData);
+		
+    }
 
+    // --- 正常処理 ---
+    const colSpec = "|c".repeat(maxCols) + "|";
+    let bodyDisplay = "";
+    let bodyCopy = "";
+
+    tableData.forEach((row) => {
+        const rowText = row.join(" & ");
+        bodyDisplay += rowText + " \\\\ \\hline\n";
+        bodyCopy += rowText + " \\\\\\\\ \\hline\n";
+    });
+
+    const katexDisplay = `$$
+\\begin{array}{${colSpec}} \\hline
+${bodyDisplay}\\end{array}
+$$`;
+
+    const katexCopy = `$$
+\\\\begin{array}{${colSpec}} \\\\hline
+${bodyCopy}\\\\end{array}
+$$`;
+
+    document.getElementById("output").textContent = katexDisplay;
+    document.getElementById("copyBuffer").value = katexCopy;
+}// コピー処理
 function copyKatex() {
-    navigator.clipboard.writeText(
-        document.getElementById("copyTarget").value
-    );
+    const text = document.getElementById("copyBuffer").value;
+    navigator.clipboard.writeText(text);
 }
+
+// データからTeXコードを生成して出力エリアを更新する関数
+function updateOutputFromData(data) {
+    const maxCols = data[0] ? data[0].length : 0;
+    const colSpec = "|c".repeat(maxCols) + "|";
+    
+    let bodyDisplay = "";
+    let bodyCopy = "";
+
+    data.forEach((row) => {
+        const rowText = row.join(" & ");
+        bodyDisplay += rowText + " \\\\ \\hline\n";
+        bodyCopy += rowText + " \\\\\\\\ \\hline\n";
+    });
+
+    const katexDisplay = `$$
+\\begin{array}{${colSpec}} \\hline
+${bodyDisplay}\\end{array}
+$$`;
+
+    const katexCopy = `$$
+\\\\begin{array}{${colSpec}} \\\\hline
+${bodyCopy}\\\\end{array}
+$$`;
+
+    document.getElementById("output").textContent = katexDisplay;
+    document.getElementById("copyBuffer").value = katexCopy;
+}
+
+// ボタンイベント登録
+document.getElementById("convertBtn").addEventListener("click", convertTable);
+document.getElementById("copyBtn").addEventListener("click", copyKatex);
 </script>
 </body>
 </html>
