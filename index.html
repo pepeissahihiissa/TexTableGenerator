@@ -21,42 +21,46 @@ button { padding: 8px 16px; margin-top: 10px; }
 <textarea id="copyBuffer" style="display:none"></textarea>
 
 <script>
-function parseMarkdownTable(md) {
-    const lines = md.trim().split(/\r?\n/);
-    const rows = [];
+function convertTable() {
+    const md = document.getElementById("mdInput").value;
+    const lines = md.trim().split("\n");
 
-    for (let line of lines) {
-        line = line.trim();
-        if (!line.startsWith("|") || !line.endsWith("|")) continue;
-        const cells = line.slice(1, -1).split("|").map(c => c.trim());
-        rows.push(cells);
+    // 列 spec（|c|c|c|... を作る）
+    const colCount = lines[0].split("|").length - 2;
+    const colSpec = "c|".repeat(colCount);
+
+    let body = "";
+    for (let i = 0; i < lines.length; i++) {
+        if (i === 1) continue; // --- 区切り行はスキップ
+
+        const cols = lines[i]
+          .split("|")
+          .slice(1, -1)
+          .map(c => c.trim());
+
+        body += cols.join(" & ") + " \\\\\\\\ \\hline\n";  
+        // ^ JS で \\ を出すには \\\\ が必要
     }
-    return rows;
+
+    const katex = 
+      "$$\\n" +
+      "\\\\begin{array}{|" + colSpec + "}\\\\hline\\n" +
+      body +
+      "\\\\end{array}\\n" +
+      "$$";
+
+    // 表示
+    document.getElementById("katexOutput").textContent = katex;
+
+    // コピー用
+    document.getElementById("copyTarget").value = katex;
 }
 
-function convertToKatex(rows) {
-    if (rows.length === 0) return "";
-    const colCount = rows[0].length;
-    const colSpec = Array(colCount).fill("c").join("|");
-    let body = rows.map(r => r.join(" & ")).join(" \\\n\\hline\n");
-    return `$$\n\\begin{array}{|${colSpec}|}\\hline\n${body} \\\n\\hline\n\\end{array}\n$$`;
+function copyKatex() {
+    navigator.clipboard.writeText(
+        document.getElementById("copyTarget").value
+    );
 }
-
-document.getElementById("convertBtn").onclick = () => {
-    const md = document.getElementById("input").value;
-    const rows = parseMarkdownTable(md);
-    let tex = convertToKatex(rows);
-    document.getElementById("output").textContent = tex;
-};
-
-document.getElementById("copyBtn").onclick = () => {
-    let raw = document.getElementById("output").textContent;
-    let escaped = raw.replace(/\\/g, "\\\\");
-    const buf = document.getElementById("copyBuffer");
-    buf.value = escaped;
-    buf.select();
-    document.execCommand("copy");
-};
 </script>
 </body>
 </html>
