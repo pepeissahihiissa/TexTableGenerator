@@ -5,11 +5,16 @@
 <title>Markdown Table → KaTeX Converter</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 <style>
-body { font-family: sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; }
-textarea { width: 100%; height: 180px; font-family: monospace; font-size: 14px; margin-bottom: 10px; }
-pre { width: 100%; padding: 10px; background: #f7f7f7; border: 1px solid #ccc; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 14px; }
-button { padding: 8px 16px; cursor: pointer; }
-
+body { font-family: sans-serif; padding: 20px; background:#fafafa; }
+.title { font-size: 22px; margin-bottom: 4px; }
+.desc { margin-bottom: 16px; color:#444; }
+textarea { width: 100%; height: 180px; font-family: monospace; font-size: 14px; padding:8px; border-radius:6px; border:1px solid #bbb; background:white; }
+pre { width: 100%; padding: 12px; background: #f2f2f2; border: 1px solid #ccc; border-radius:6px; white-space: pre; font-family: monospace; font-size: 14px; }
+button { padding: 8px 16px; margin-top: 6px; border-radius:6px; border:1px solid #888; cursor:pointer; background:white; }
+button:hover { background:#eee; }
+.table-container { margin-top:20px; }
+.selected-col { background: #cfe3ff !important; transition: background 0.4s; }
+.align-buttons { margin: 6px 0; }
 /* 編集中のセルの背景色 */
 td:focus {
     background-color: #e8f0fe !important;
@@ -49,18 +54,19 @@ td { padding: 8px; border: 1px solid #ccc; min-width: 50px; }
 </style>
 </head>
 <body>
-
-<h2>Markdown 表 → KaTeX array 変換</h2>
-
+<h1 class="title">Markdown, Excel, csv → KaTeX 配列 変換ツール（noteなど向け）</h1>
+<p class="desc">Markdown形式の表（またはExcel、csvのコピー）を貼り付け、「変換」ボタンでKaTeXの<code>array</code>形式に変換します。<br>
+セルをクリックして選択し、左寄せ／中央／右寄せボタンで列全体を整形できます。</p>
 <textarea id="input" placeholder="ここにMarkdown表、Excel、CSVを貼り付けてください"></textarea>
-<div id="controls">
-    <button id="convertBtn">変換</button>
-    <button id="copyBtn">結果をコピー</button>
-</div>
+<br />
+<button id="convertBtn">変換</button>
+<button id="copyBtn">コピー</button>
+<br /><br />
 
 <div id="errorMsg" style="color: #d9534f; font-size: 14px; margin-top: 10px; min-height: 1.5em;"></div>
 
 <h3>プレビュー・編集</h3>
+<p class="desc">以下で表の項目を直接編集することもできます。</p>
 <div class="toolbar">
     <button id="btnBold" title="太字"><span class="material-symbols-outlined">format_bold</span></button>
     <button id="btnItalic" title="斜体"><span class="material-symbols-outlined">format_italic</span></button>
@@ -97,6 +103,51 @@ window.onload = function() {
     document.getElementById("btnAlignL").addEventListener("click", () => applyAlign('l'));
     document.getElementById("btnAlignC").addEventListener("click", () => applyAlign('c'));
     document.getElementById("btnAlignR").addEventListener("click", () => applyAlign('r'));
+};
+
+function parseMarkdownTable(md) {
+    const lines = md.trim().split(/\r?\n/);
+    const rows = [];
+
+    for (let line of lines) {
+        line = line.trim();
+        if (!line.startsWith("|") || !line.endsWith("|")) continue;
+        const cells = line.slice(1, -1).split("|").map(c => c.trim());
+        rows.push(cells);
+    }
+    return rows;
+}
+
+function convertToKatex(rows) {
+    if (rows.length === 0) return "";
+    const colCount = rows[0].length;
+    const colSpec = Array(colCount).fill("c").join("|");
+let body = rows
+    .map(r => r.join(" & "))
+    .join(" \\\\\n\\hline\n");
+
+return `$$
+\\begin{array}{|${colSpec}|}\\hline
+${body} \\\\
+\\hline
+\\end{array}
+$$`;
+}
+
+document.getElementById("convertBtn").onclick = () => {
+    const md = document.getElementById("input").value;
+    const rows = parseMarkdownTable(md);
+    let tex = convertToKatex(rows);
+    document.getElementById("output").textContent = tex;
+};
+
+document.getElementById("copyBtn").onclick = () => {
+    let raw = document.getElementById("output").textContent;
+let escaped = raw.replace(/\\/g, "\\\\");
+    const buf = document.getElementById("copyBuffer");
+    buf.value = escaped;
+    buf.select();
+    document.execCommand("copy");
 };
 
 function convertTable() {
@@ -254,5 +305,8 @@ function copyKatex() {
     navigator.clipboard.writeText(text).then(() => alert("コピーしました"));
 }
 </script>
+<footer style="margin-top:40px; color:#666; font-size:13px;">
+使い方：Markdown 表を貼り付け → 変換 → 生成された表のセルを選択 → 左/中/右寄せボタンで列整形できます。
+</footer>
 </body>
 </html>
