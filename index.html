@@ -3,51 +3,127 @@
 <head>
 <meta charset="UTF-8" />
 <title>Markdown Table → KaTeX Converter</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 <style>
-body { font-family: sans-serif; padding: 20px; }
-textarea { width: 100%; height: 180px; font-family: monospace; font-size: 14px; }
-pre { width: 100%; padding: 10px; background: #f7f7f7; border: 1px solid #ccc; white-space: pre; font-family: monospace; font-size: 14px; }
-button { padding: 8px 16px; margin-top: 10px; }
+body { font-family: sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; }
+textarea { width: 100%; height: 180px; font-family: monospace; font-size: 14px; margin-bottom: 10px; }
+pre { width: 100%; padding: 10px; background: #f7f7f7; border: 1px solid #ccc; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: 14px; }
+button { padding: 8px 16px; cursor: pointer; }
+
+/* 編集中のセルの背景色 */
+td:focus {
+    background-color: #e8f0fe !important;
+    outline: 2px solid #1a73e8;
+}
+
+.toolbar {
+    margin-bottom: 10px;
+    display: flex;
+    gap: 5px;
+    background: #eee;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.toolbar button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.toolbar button:hover { background: #f0f0f0; }
+.material-symbols-outlined { font-size: 20px; }
+
+.highlight {
+  background-color: #ffe58f; /* 少し目立つ色 */
+  transition: background-color 0.3s ease;
+}
+
+table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+td { padding: 8px; border: 1px solid #ccc; min-width: 50px; }
 </style>
 </head>
 <body>
+
 <h2>Markdown 表 → KaTeX array 変換</h2>
 
-<textarea id="input" placeholder="ここにMarkdown表を貼り付けてください"></textarea>
-<br />
-<button id="convertBtn">変換</button>
-<button id="copyBtn">コピー</button>
-<br /><br />
+<textarea id="input" placeholder="ここにMarkdown表、Excel、CSVを貼り付けてください"></textarea>
+<div id="controls">
+    <button id="convertBtn">変換</button>
+    <button id="copyBtn">結果をコピー</button>
+</div>
 
 <div id="errorMsg" style="color: #d9534f; font-size: 14px; margin-top: 10px; min-height: 1.5em;"></div>
 
 <h3>プレビュー・編集</h3>
-<div id="tablePreview" style="margin-bottom: 20px; overflow-x: auto;">
-    </div>
+<div class="toolbar">
+    <button id="btnBold" title="太字"><span class="material-symbols-outlined">format_bold</span></button>
+    <button id="btnItalic" title="斜体"><span class="material-symbols-outlined">format_italic</span></button>
+    <button id="btnStrike" title="打ち消し線"><span class="material-symbols-outlined">strikethrough_s</span></button>
+    <div style="width: 1px; background: #ccc; margin: 0 5px;"></div>
+    <button id="btnAlignL" title="左寄せ"><span class="material-symbols-outlined">format_align_left</span></button>
+    <button id="btnAlignC" title="中央揃え"><span class="material-symbols-outlined">format_align_center</span></button>
+    <button id="btnAlignR" title="右寄せ"><span class="material-symbols-outlined">format_align_right</span></button>
+</div>
 
+<div id="tablePreview"></div>
+
+<h3>出力結果</h3>
 <pre id="output">変換結果がここに表示されます</pre>
 <textarea id="copyBuffer" style="display:none"></textarea>
 
-※noteへのコピーのために￥￥（改行）は￥￥￥￥に変換しています。
-noteに貼る場合は、テキスト選択してコピーではなく、コピーボタンをご利用ください。
+<p style="font-size: 12px; color: #666;">※note用に改行記号を \\\\ (4つ) に変換してコピーします。</p>
 
 <script>
-// 変換処理
+window.onload = function() {
+    // ボタンのイベント登録
+    document.getElementById("convertBtn").addEventListener("click", convertTable);
+    document.getElementById("copyBtn").addEventListener("click", copyKatex);
+    
+    // ツールバーボタンのイベント登録
+    document.getElementById("btnBold").addEventListener("mousedown", (e) => {
+    e.preventDefault();  // ← ボタンが focus を奪わなくなる
+    applyStyle('bold');
+});
+document.getElementById("btnItalic").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    applyStyle('italic');
+});
+document.getElementById("btnStrike").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    applyStyle('strikethrough');
+});
+document.getElementById("btnAlignL").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    applyAlign('l');
+});
+document.getElementById("btnAlignC").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    applyAlign('c');
+});
+document.getElementById("btnAlignR").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    applyAlign('r');
+});
+};
+
 function convertTable() {
     const input = document.getElementById("input").value.trim();
     const errorElem = document.getElementById("errorMsg");
-    errorElem.textContent = ""; // エラー出力をリセット
-
-    // --- エラーチェック1: 空入力 ---
     if (!input) {
-        errorElem.textContent = "⚠️ 入力が空です。Markdown、Excel、またはCSVを貼り付けてください。";
+        errorElem.textContent = "⚠️ 入力が空です。";
         return;
     }
+    errorElem.textContent = "";
 
     let tableData = [];
     const lines = input.split('\n');
     
-    // 形式判定
     if (input.includes('|')) {
         tableData = lines
             .filter((line, i) => !(i === 1 && line.includes('---')))
@@ -57,87 +133,98 @@ function convertTable() {
         tableData = lines.map(line => line.split(delimiter).map(c => c.trim()));
     }
 
-    // --- エラーチェック2: 列数の不一致 ---
-    const colCounts = tableData.map(row => row.length);
-    const maxCols = Math.max(...colCounts);
-    const isInconsistent = colCounts.some(count => count !== maxCols);
+    const maxCols = Math.max(...tableData.map(row => row.length));
+    tableData = tableData.map(row => {
+        while(row.length < maxCols) row.push(""); 
+        return row;
+    });
 
-    if (isInconsistent) {
-        errorElem.textContent = `⚠️ 行によって列数が異なります（最大 ${maxCols} 列）。正しく変換できない可能性があります。`;
-        // 処理は続行させますが、不足分を補完する処理を入れるとより親切です
-        tableData = tableData.map(row => {
-            while(row.length < maxCols) row.push(""); // 足りないセルを空文字で埋める
-            return row;
-        });
-		
-		// --- プレビューテーブルの生成 ---
     renderPreviewTable(tableData);
-    
-    // --- TeX出力の更新 ---
-    updateOutputFromData(tableData);
-		
-    }
+    updateOutputFromData();
+}
 
-    // --- 正常処理 ---
-    const colSpec = "|c".repeat(maxCols) + "|";
+function renderPreviewTable(data) {
+    const container = document.getElementById("tablePreview");
+    let html = '<table>';
+    data.forEach(row => {
+        html += '<tr>';
+        row.forEach(cell => {
+            html += `<td contenteditable="true" data-align="c" oninput="onTableEdit()">${cell}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</table>';
+    container.innerHTML = html;
+}
+
+function updateOutputFromData() {
+    const rows = document.querySelectorAll("#tablePreview tr");
+    if (rows.length === 0) return;
+
+    const firstRowTds = rows[0].querySelectorAll("td");
+    const colSpecs = Array.from(firstRowTds).map(td => td.dataset.align || 'c');
+    const colSpecStr = "|" + colSpecs.join("|") + "|";  
+
     let bodyDisplay = "";
     let bodyCopy = "";
 
-    tableData.forEach((row) => {
-        const rowText = row.join(" & ");
-        bodyDisplay += rowText + " \\\\ \\hline\n";
-        bodyCopy += rowText + " \\\\\\\\ \\hline\n";
+    rows.forEach(row => {
+        const rowCells = Array.from(row.querySelectorAll("td")).map(td => {
+            let text = td.innerHTML.trim();
+            text = text.replace(/<b>(.*?)<\/b>/g, "\\mathbf{$1}");
+            text = text.replace(/<i>(.*?)<\/i>/g, "\\textit{$1}");
+            text = text.replace(/<s>(.*?)<\/s>/g, "\\cancel{$1}");
+            text = text.replace(/<[^>]*>/g, ""); 
+            return text;
+        });
+        const line = rowCells.join(" & ");
+        bodyDisplay += line + " \\\\ \\hline\n";
+        bodyCopy += line + " \\\\\\\\ \\hline\n";
     });
 
-    const katexDisplay = `$$
-\\begin{array}{${colSpec}} \\hline
-${bodyDisplay}\\end{array}
-$$`;
+const resDisp =
+  "$$\n" +
+  "\\begin{array}{" + colSpecStr + "} \\hline\n" +
+  bodyDisplay +
+  "\\end{array}\n" +
+  "$$";
 
-    const katexCopy = `$$
-\\\\begin{array}{${colSpec}} \\\\hline
-${bodyCopy}\\\\end{array}
-$$`;
+const resCopy =
+  "$$\n" +
+  "\\\\begin{array}{" + colSpecStr + "} \\\\hline\n" +
+  bodyCopy +
+  "\\\\end{array}\n" +
+  "$$";
+    document.getElementById("output").textContent = resDisp;
+    document.getElementById("copyBuffer").value = resCopy;
+}
 
-    document.getElementById("output").textContent = katexDisplay;
-    document.getElementById("copyBuffer").value = katexCopy;
-}// コピー処理
+function onTableEdit() { updateOutputFromData(); }
+
+function applyStyle(style) {
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.tagName === 'TD') {
+        const txt = activeEl.innerText;
+        if (style === 'bold') activeEl.innerHTML = activeEl.innerHTML.includes('<b>') ? txt : `<b>${txt}</b>`;
+        if (style === 'italic') activeEl.innerHTML = activeEl.innerHTML.includes('<i>') ? txt : `<i>${txt}</i>`;
+        if (style === 'strikethrough') activeEl.innerHTML = activeEl.innerHTML.includes('<s>') ? txt : `<s>${txt}</s>`;
+        onTableEdit();
+    }
+}
+
+function applyAlign(align) {
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.tagName === 'TD') {
+        activeEl.dataset.align = align;
+        activeEl.style.textAlign = (align === 'l' ? 'left' : align === 'r' ? 'right' : 'center');
+        onTableEdit();
+    }
+}
+
 function copyKatex() {
     const text = document.getElementById("copyBuffer").value;
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).then(() => alert("コピーしました"));
 }
-
-// データからTeXコードを生成して出力エリアを更新する関数
-function updateOutputFromData(data) {
-    const maxCols = data[0] ? data[0].length : 0;
-    const colSpec = "|c".repeat(maxCols) + "|";
-    
-    let bodyDisplay = "";
-    let bodyCopy = "";
-
-    data.forEach((row) => {
-        const rowText = row.join(" & ");
-        bodyDisplay += rowText + " \\\\ \\hline\n";
-        bodyCopy += rowText + " \\\\\\\\ \\hline\n";
-    });
-
-    const katexDisplay = `$$
-\\begin{array}{${colSpec}} \\hline
-${bodyDisplay}\\end{array}
-$$`;
-
-    const katexCopy = `$$
-\\\\begin{array}{${colSpec}} \\\\hline
-${bodyCopy}\\\\end{array}
-$$`;
-
-    document.getElementById("output").textContent = katexDisplay;
-    document.getElementById("copyBuffer").value = katexCopy;
-}
-
-// ボタンイベント登録
-document.getElementById("convertBtn").addEventListener("click", convertTable);
-document.getElementById("copyBtn").addEventListener("click", copyKatex);
 </script>
 </body>
 </html>
